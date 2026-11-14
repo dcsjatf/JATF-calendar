@@ -211,12 +211,13 @@ function era_(x) {
 
 /* ===== DISCORD: one pinned message with the upcoming missions, kept up to date ===== */
 // Needs Script Property DISCORD_WEBHOOK (never put the webhook URL in public code).
+// For several Discord servers, put several webhook URLs in DISCORD_WEBHOOK, separated by a space or comma.
 const CAL_URL = 'https://dcsjatf.github.io/JATF-calendar/';
 const ICON = { PvE: '🟡', PvP: '🔴', PvEvP: '🔵', Training: '🟢' };
 
 // Run ONCE from the editor: posts the message and refreshes it every hour.
 function setupDiscord() {
-  if (!PropertiesService.getScriptProperties().getProperty('DISCORD_WEBHOOK')) throw new Error('Add the Script Property DISCORD_WEBHOOK first.');
+  if (!hooks_().length) throw new Error('Add the Script Property DISCORD_WEBHOOK first (one or more webhook URLs).');
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'refreshDiscord').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('refreshDiscord').timeBased().everyHours(1).create();
   updateDiscord_();
@@ -227,12 +228,26 @@ function setupDiscord() {
 function refreshDiscord() { updateDiscord_(); }
 
 // Run if you deleted the Discord message and want a fresh one.
-function resetDiscordMessage() { PropertiesService.getScriptProperties().deleteProperty('DISCORD_MSG_ID'); updateDiscord_(); }
+function resetDiscordMessage() {
+  const props = PropertiesService.getScriptProperties();
+  Object.keys(props.getProperties()).filter(k => k.indexOf('DISCORD_MSG_ID') === 0).forEach(k => props.deleteProperty(k));
+  updateDiscord_();
+}
+
+function hooks_() {
+  return String(PropertiesService.getScriptProperties().getProperty('DISCORD_WEBHOOK') || '')
+    .split(/[\s,]+/).filter(h => /^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(h));
+}
+
+function msgKey_(hook) {
+  const d = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, hook);
+  return 'DISCORD_MSG_ID_' + Utilities.base64EncodeWebSafe(d).replace(/=+$/, '');
+}
 
 function updateDiscord_(all) {
   const props = PropertiesService.getScriptProperties();
-  const hook = props.getProperty('DISCORD_WEBHOOK');
-  if (!hook) return;
+  const hooks = hooks_();
+  if (!hooks.length) return;
   all = all || readAll_();
   const now = Date.now();
   const list = Object.keys(all).sort().map(k => {
@@ -269,8 +284,22 @@ function updateDiscord_(all) {
       '\n\n[Open the full calendar](' + CAL_URL + ')').slice(0, 4000);
   }
   const payload = { username: 'JATF Schedule', embeds: [embed] };
+  const errors = [];
+  hooks.forEach(hook => {
+    try { send_(hook, payload, props); } catch (err) { errors.push(String(err)); }
+  });
+  if (errors.length) throw new Error(errors.join(' | '));
+}
+
+function send_(hook, payload, props) {
+  const key = msgKey_(hook);
+  // keep the message already posted before multi-server support
+  if (!props.getProperty(key) && props.getProperty('DISCORD_MSG_ID')) {
+    props.setProperty(key, props.getProperty('DISCORD_MSG_ID'));
+    props.deleteProperty('DISCORD_MSG_ID');
+  }
   const opt = { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true };
-  const id = props.getProperty('DISCORD_MSG_ID');
+  const id = props.getProperty(key);
   if (id) {
     const res = UrlFetchApp.fetch(hook + '/messages/' + id, opt);
     if (res.getResponseCode() < 300) return;
@@ -279,7 +308,7 @@ function updateDiscord_(all) {
   opt.method = 'post';
   const res = UrlFetchApp.fetch(hook + '?wait=true', opt);
   if (res.getResponseCode() >= 300) throw new Error('Discord post failed: ' + res.getResponseCode() + ' ' + res.getContentText());
-  props.setProperty('DISCORD_MSG_ID', JSON.parse(res.getContentText()).id);
+  props.setProperty(key, JSON.parse(res.getContentText()).id);
 }
 
 /*
@@ -293,7 +322,8 @@ SETUP (10 minutes)
    New form requests then show up in the portal as pending.
 5. Deploy → New deployment → type "Web app" → Execute as: Me → Who has access: Anyone → Deploy.
 6. Copy the Web app URL (ends with /exec) into API_URL in index.html and booking.html.
-7. Discord (optional): Script Properties → add DISCORD_WEBHOOK = the channel webhook URL.
+7. Discord (optional): Script Properties → add DISCORD_WEBHOOK = the channel webhook URL
+   (several servers: several URLs separated by a space).
    Run "setupDiscord" once (authorize). It posts the schedule message; pin it.
    The message updates itself on every booking change and every hour.
    The poster image comes from the GitHub workflow "Discord poster" (runs every 15 minutes).
