@@ -124,6 +124,7 @@ function doPost(e) {
     }
     SpreadsheetApp.flush();
     all = readAll_();
+    try { updateDiscord_(all); } catch (err) { Logger.log('Discord: ' + err); }
     return json_({ ok: true, bookings: public_(all, token) });
   } catch (err) {
     return json_({ ok: false, error: 'server', message: String(err) });
@@ -138,7 +139,7 @@ function doPost(e) {
 function importFromForm() { return import_('confirmed'); }
 
 // Installed as a "From spreadsheet – On form submit" trigger: new form requests arrive as pending.
-function onFormSubmit(e) { import_('pending'); }
+function onFormSubmit(e) { import_('pending'); try { updateDiscord_(); } catch (err) { Logger.log('Discord: ' + err); } }
 
 function import_(status) {
   const ss = SpreadsheetApp.getActive();
@@ -197,6 +198,72 @@ function era_(x) {
   return cw && mod ? 'Cold War / Modern' : mod ? 'Modern' : cw ? 'Cold War' : ww2 ? 'WW2' : t.trim();
 }
 
+/* ===== DISCORD: one pinned message with the upcoming missions, kept up to date ===== */
+// Needs Script Property DISCORD_WEBHOOK (never put the webhook URL in public code).
+const CAL_URL = 'https://dcsjatf.github.io/JATF-calendar/';
+const ICON = { PvE: '🟡', PvP: '🔴', PvEvP: '🔵', Training: '🟢' };
+
+// Run ONCE from the editor: posts the message and refreshes it every hour.
+function setupDiscord() {
+  if (!PropertiesService.getScriptProperties().getProperty('DISCORD_WEBHOOK')) throw new Error('Add the Script Property DISCORD_WEBHOOK first.');
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'refreshDiscord').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('refreshDiscord').timeBased().everyHours(1).create();
+  updateDiscord_();
+  Logger.log('Discord message posted. Pin it in the channel.');
+}
+
+// Hourly trigger: drops missions that are over and updates the countdowns.
+function refreshDiscord() { updateDiscord_(); }
+
+// Run if you deleted the Discord message and want a fresh one.
+function resetDiscordMessage() { PropertiesService.getScriptProperties().deleteProperty('DISCORD_MSG_ID'); updateDiscord_(); }
+
+function updateDiscord_(all) {
+  const props = PropertiesService.getScriptProperties();
+  const hook = props.getProperty('DISCORD_WEBHOOK');
+  if (!hook) return;
+  all = all || readAll_();
+  const now = Date.now();
+  const list = Object.keys(all).sort().map(k => {
+    const r = all[k], t = (r.time || '20:00').split(':');
+    const p = k.split('-').map(Number);
+    return { k: k, r: r, ts: Date.UTC(p[0], p[1] - 1, p[2], Number(t[0]) || 0, Number(t[1]) || 0) };
+  }).filter(x => x.r.status !== 'blocked' && x.ts > now - 3 * 3600e3);
+  const conf = list.filter(x => x.r.status === 'confirmed');
+  const pend = list.filter(x => x.r.status === 'pending').length;
+  const desc = conf.slice(0, 10).map(x => {
+    const r = x.r, u = Math.floor(x.ts / 1000);
+    const name = r.title || r.map || (r.type + ' mission');
+    return (ICON[r.type] || '⚪') + ' **<t:' + u + ':F>** · <t:' + u + ':R>\n' +
+      '**' + name + '** — ' + r.type + ' ' + r.era + (r.map && r.title ? ' · ' + r.map : '') +
+      ' · ' + r.time + 'Z · by ' + r.discord;
+  }).join('\n\n') || '_No missions scheduled yet._';
+  const extra = (conf.length > 10 ? '\n\n…and ' + (conf.length - 10) + ' more this season.' : '') +
+    (pend ? '\n\n⏳ ' + pend + ' booking request' + (pend > 1 ? 's' : '') + ' waiting for staff approval.' : '');
+  const payload = {
+    username: 'JATF Schedule',
+    embeds: [{
+      title: '📅 JATF — Upcoming missions',
+      url: CAL_URL,
+      color: 0xffc000,
+      description: (desc + extra + '\n\n[Open the full calendar](' + CAL_URL + ') · [Book a mission](' + CAL_URL + 'booking.html)').slice(0, 4000),
+      footer: { text: 'Times shown in your local time zone · updated' },
+      timestamp: new Date().toISOString()
+    }]
+  };
+  const opt = { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true };
+  const id = props.getProperty('DISCORD_MSG_ID');
+  if (id) {
+    const res = UrlFetchApp.fetch(hook + '/messages/' + id, opt);
+    if (res.getResponseCode() < 300) return;
+    if (res.getResponseCode() !== 404) throw new Error('Discord edit failed: ' + res.getResponseCode() + ' ' + res.getContentText());
+  }
+  opt.method = 'post';
+  const res = UrlFetchApp.fetch(hook + '?wait=true', opt);
+  if (res.getResponseCode() >= 300) throw new Error('Discord post failed: ' + res.getResponseCode() + ' ' + res.getContentText());
+  props.setProperty('DISCORD_MSG_ID', JSON.parse(res.getContentText()).id);
+}
+
 /*
 SETUP (10 minutes)
 1. Open the JATF spreadsheet → Extensions → Apps Script. Paste this whole file as Code.gs and save.
@@ -208,5 +275,8 @@ SETUP (10 minutes)
    New form requests then show up in the portal as pending.
 5. Deploy → New deployment → type "Web app" → Execute as: Me → Who has access: Anyone → Deploy.
 6. Copy the Web app URL (ends with /exec) into API_URL in index.html and booking.html.
+7. Discord (optional): Script Properties → add DISCORD_WEBHOOK = the channel webhook URL.
+   Run "setupDiscord" once (authorize). It posts the schedule message; pin it.
+   The message updates itself on every booking change and every hour.
 After changing this code, use Deploy → Manage deployments → Edit → Version: New version, so the URL stays the same.
 */
