@@ -179,13 +179,16 @@ function openEv(k){const b=B[k];if(!b||b.status=="blocked")return;const st=start
   <dl class="kv"><dt>Date</dt><dd>${esc(st.toLocaleDateString([], {weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}))}</dd>
   <dt>Time</dt><dd>${esc(b.time)} Zulu<br><span style="color:var(--mut)">${esc(locDay(st))}, ${esc(loc(st))} your time</span></dd>
   ${b.map?`<dt>Map</dt><dd>${esc(b.map)}</dd>`:""}<dt>Mission editor</dt><dd class="who">${esc(b.discord)}</dd>${b.notes?`<dt>Notes</dt><dd>${esc(b.notes)}</dd>`:""}</dl>
-  <div class="btns"><button class="btn" id="ics">Add to my calendar</button><button class="btn ghost" id="cls">Close</button></div>`;
-  $("#dlg").classList.add("on");$("#ics").focus();
+  <div class="btns"><a class="btn" id="gcal" href="${gcal(k,b,st)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Google Calendar</a><button class="btn ghost" id="ics">Download .ics</button><button class="btn ghost" id="cls">Close</button></div>`;
+  $("#dlg").classList.add("on");$("#gcal").focus();
   $("#cls").onclick=close;$("#ics").onclick=()=>ics(k,b,st)}
 function close(){$("#dlg").classList.remove("on")}
 $("#dlg").addEventListener("click",e=>{if(e.target.id=="dlg")close()});
 addEventListener("keydown",e=>{if(e.key=="Escape")close()});
 
+function gcal(k,b,st){const f=d=>d.toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");const en=new Date(st.getTime()+3*36e5);
+  const q=new URLSearchParams({action:"TEMPLATE",text:"JATF – "+head(b),dates:f(st)+"/"+f(en),details:`${b.type} ${b.era}${b.map?" · "+b.map:""}\nMission editor: ${b.discord}${b.notes?"\n"+b.notes:""}\n\nhttps://dcsjatf.github.io/JATF-calendar/`});
+  return esc("https://calendar.google.com/calendar/render?"+q.toString().replace(/(\d{8}T\d{6}Z)%2F/,"$1/"))}
 function ics(k,b,st){const f=d=>d.toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");const en=new Date(st.getTime()+3*36e5);
   const t=s=>String(s||"").replace(/[\\,;]/g,m=>"\\"+m).replace(/\n/g,"\\n");
   const txt=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//JATF//Event Calendar//EN","BEGIN:VEVENT",`UID:jatf-${k}@jatf`,`DTSTAMP:${f(new Date())}`,`DTSTART:${f(st)}`,`DTEND:${f(en)}`,
