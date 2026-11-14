@@ -33,7 +33,25 @@ button,select{font:inherit;color:inherit}
 .bar h2{margin:0 auto 0 0;font:800 clamp(26px,3.4vw,40px)/1.05 Montserrat,sans-serif}
 .bar h2 span{color:var(--red)}
 .ib{min-width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);cursor:pointer;padding:0 14px}
-.ib:hover{border-color:var(--gold)}@media(max-width:600px){.bar h2{flex-basis:100%}}
+.ib:hover{border-color:var(--gold)}@media(max-width:600px){.bar h2{flex-basis:100%}.vt{flex:1 1 100%}.vt button{flex:1}#today{flex:1}}
+.vt{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px}
+.vt button{border:0;background:transparent;min-height:38px;padding:6px 14px;border-radius:999px;cursor:pointer;font-weight:600;font-size:15px;color:var(--mut)}
+.vt button[aria-selected=true]{background:var(--gold);color:#0b1424}
+.seas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.sm{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px}
+.sm.cur{border-color:var(--gold)}
+.sm h4{margin:0 0 8px;font:600 17px/1 "Josefin Sans";color:var(--gold);display:flex;justify-content:space-between;cursor:pointer}
+.sm h4 small{color:var(--mut);font-weight:400;font-size:13px}
+.sw,.sg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.sw span{font-size:11px;color:var(--mut);text-align:center}
+.sd{min-height:42px;border-radius:6px;padding:3px 4px;background:#0f1a2e;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mut)}
+.sd.e{cursor:pointer;color:var(--ink)}.sd.e:hover{background:#1b2c4d}
+.sd.today{box-shadow:inset 0 0 0 2px var(--gold);color:var(--gold)}
+.sd.blk{background:repeating-linear-gradient(135deg,#17233c 0 4px,#121d33 4px 8px)}
+.sd.nil{background:transparent}
+.ln{display:block;height:4px;border-radius:2px;background:var(--gold);margin-top:auto}
+.ln+.ln{margin-top:0}
+.ln.PvP{background:var(--red)}.ln.PvEvP{background:var(--blue)}.ln.Training{background:var(--green)}.ln.pend{opacity:.55}
 .flt{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .fb{min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;cursor:pointer;font-size:15px;display:flex;align-items:center;gap:8px}
 .fb i{width:10px;height:10px;border-radius:50%}
@@ -93,12 +111,14 @@ button,select{font:inherit;color:inherit}
   <section class="next" id="next" aria-live="polite"></section>
   <div class="bar">
     <h2 id="mTitle"></h2>
+    <div class="vt" role="tablist"><button id="vMonth" role="tab">Month</button><button id="vSeason" role="tab">JATF Season</button></div>
     <button class="ib" id="prev" aria-label="Previous month">‹</button>
     <button class="ib" id="today">Today</button>
     <button class="ib" id="nextM" aria-label="Next month">›</button>
   </div>
   <div class="flt" id="flt"></div>
   <div class="cal" id="cal"></div>
+  <div class="seas" id="seas" hidden></div>
   <section class="agenda"><h3 id="aTitle">This month</h3><div id="agenda"></div></section>
   <p class="foot">Missions are placed on their Zulu date. Times are shown in Zulu and in your local time. Updates every minute.</p>
 </main>
@@ -119,6 +139,8 @@ const pad=n=>String(n).padStart(2,"0");
 const iso=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
 const now0=new Date();const TODAY=iso(now0.getUTCFullYear(),now0.getUTCMonth(),now0.getUTCDate());
 let view={y:now0.getUTCFullYear(),m:now0.getUTCMonth()};
+const curSeason=()=>now0.getUTCMonth()>=8?now0.getUTCFullYear():now0.getUTCFullYear()-1;
+let mode=location.hash=="#season"?"season":"month",sy=curSeason();
 let B={};let on={PvE:true,PvP:true,PvEvP:true,Training:true},showPend=false;
 $("#logo").src=LOGO;
 const tzName=Intl.DateTimeFormat().resolvedOptions().timeZone||"local";
@@ -148,11 +170,19 @@ function renderNext(){
   <div style="text-align:right"><div class="t">${esc(b.time)}Z</div><div class="s">${esc(locDay(st))}, ${esc(loc(st))} your time</div></div>`;
   box.style.cursor="pointer";box.onclick=()=>openEv(k)}
 
+function item(k,b){const st=start(k,b);const d=new Date(Date.UTC(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8)));
+  return`<div class="it${k<TODAY?" past":""}" data-k="${k}" tabindex="0" role="button"><div class="d"><b>${+k.slice(8)}</b><span>${WD[(d.getUTCDay()+6)%7]}</span></div>
+  <div class="m"><b>${esc(head(b))}</b>${b.status=="pending"?'<span class="tag">pending</span>':""}<small>${esc(sub(b))} · by <span class="who">${esc(b.discord)}</span></small></div>
+  <div class="tm"><b>${esc(b.time)}Z</b><small>${esc(loc(st))} local</small></div></div>`}
 function render(){
   renderFilters();renderNext();
+  $("#vMonth").setAttribute("aria-selected",mode=="month");$("#vSeason").setAttribute("aria-selected",mode=="season");
+  $("#cal").hidden=mode!="month";$("#seas").hidden=mode!="season";
+  const map={};events().forEach(([k,b])=>{(map[k]=map[k]||[]).push(b)});
+  if(mode=="season"){renderSeason(map);return}
+  $("#prev").setAttribute("aria-label","Previous month");$("#nextM").setAttribute("aria-label","Next month");$("#today").textContent="Today";
   const{y,m}=view;$("#mTitle").innerHTML=`${MN[m]} <span>${y}</span>`;$("#aTitle").textContent=`${MN[m]} ${y}`;
   const first=new Date(Date.UTC(y,m,1));const off=(first.getUTCDay()+6)%7;const startD=new Date(Date.UTC(y,m,1-off));
-  const map={};events().forEach(([k,b])=>{(map[k]=map[k]||[]).push(b)});
   let h=WD.map(w=>`<div class="wd">${w}</div>`).join("");
   const weeks=Math.ceil((off+new Date(Date.UTC(y,m+1,0)).getUTCDate())/7);
   for(let i=0;i<weeks*7;i++){const d=new Date(startD.getTime()+i*864e5);const k=iso(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());
@@ -163,11 +193,31 @@ function render(){
       `<div class="dots">${real.map(b=>`<i class="dot ${esc(b.type)}"></i>`).join("")}</div></div>`}
   $("#cal").innerHTML=h;
   const list=events().filter(([k,b])=>b.status!="blocked"&&k.startsWith(`${y}-${pad(m+1)}`));
-  $("#agenda").innerHTML=list.length?list.map(([k,b])=>{const st=start(k,b);const d=new Date(Date.UTC(y,m,+k.slice(8)));
-    return`<div class="it${k<TODAY?" past":""}" data-k="${k}" tabindex="0" role="button"><div class="d"><b>${+k.slice(8)}</b><span>${WD[(d.getUTCDay()+6)%7]}</span></div>
-    <div class="m"><b>${esc(head(b))}</b>${b.status=="pending"?'<span class="tag">pending</span>':""}<small>${esc(sub(b))} · by <span class="who">${esc(b.discord)}</span></small></div>
-    <div class="tm"><b>${esc(b.time)}Z</b><small>${esc(loc(st))} local</small></div></div>`}).join(""):`<div class="empty">No missions this month.</div>`;
+  $("#agenda").innerHTML=list.length?list.map(([k,b])=>item(k,b)).join(""):`<div class="empty">No missions this month.</div>`;
 }
+function renderSeason(map){
+  $("#prev").setAttribute("aria-label","Previous season");$("#nextM").setAttribute("aria-label","Next season");$("#today").textContent="This season";
+  const lbl=`${sy}–${String(sy+1).slice(2)}`;$("#mTitle").innerHTML=`JATF Season <span>${lbl}</span>`;$("#aTitle").textContent=`Season ${lbl}`;
+  const a0=iso(sy,8,1),a1=iso(sy+1,5,30);let h="";
+  for(let i=0;i<10;i++){const m=(8+i)%12,y=m<8?sy+1:sy;const off=(new Date(Date.UTC(y,m,1)).getUTCDay()+6)%7;const n=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+    let cnt=0,cells="";for(let j=0;j<off;j++)cells+=`<div class="sd nil"></div>`;
+    for(let d=1;d<=n;d++){const k=iso(y,m,d);const evs=map[k]||[];const real=evs.filter(b=>b.status!="blocked");cnt+=real.length;
+      let c="sd";if(real.length)c+=" e";if(k==TODAY)c+=" today";if(evs.some(b=>b.status=="blocked"))c+=" blk";
+      const tip=real.map(b=>`${b.time}Z ${b.type} · ${head(b)} · ${b.discord}`).join("\n");
+      cells+=`<div class="${c}" data-k="${k}"${real.length?` role="button" tabindex="0" title="${esc(tip)}" aria-label="${esc(k+" "+tip)}"`:""}><span>${d}</span>${real.map(b=>`<i class="ln ${esc(b.type)}${b.status=="pending"?" pend":""}"></i>`).join("")}</div>`}
+    const cur=y==now0.getUTCFullYear()&&m==now0.getUTCMonth();
+    h+=`<div class="sm${cur?" cur":""}"><h4 data-y="${y}" data-m="${m}" title="Open ${MN[m]} in month view">${MN[m]} ${y}<small>${cnt?cnt+" mission"+(cnt>1?"s":""):"—"}</small></h4><div class="sw">${["M","T","W","T","F","S","S"].map(x=>`<span>${x}</span>`).join("")}</div><div class="sg">${cells}</div></div>`}
+  $("#seas").innerHTML=h;
+  const list=events().filter(([k,b])=>b.status!="blocked"&&k>=a0&&k<=a1);
+  let lm="",out="";for(const[k,b]of list){const mk=k.slice(0,7);if(mk!=lm){lm=mk;out+=`<h3 style="font-size:18px;margin:22px 0 4px;color:var(--gold)">${MN[+k.slice(5,7)-1]} ${k.slice(0,4)}</h3>`}out+=item(k,b)}
+  $("#agenda").innerHTML=out||`<div class="empty">No missions this season yet.</div>`;
+}
+$("#seas").addEventListener("click",e=>{const h4=e.target.closest("h4");if(h4){view={y:+h4.dataset.y,m:+h4.dataset.m};setMode("month");return}
+  const c=e.target.closest(".sd.e");if(!c)return;const r=events().filter(([k,b])=>k==c.dataset.k&&b.status!="blocked");if(r.length)openEv(r[0][0])});
+$("#seas").addEventListener("keydown",e=>{if(e.key=="Enter"){const c=e.target.closest(".sd.e");if(c){const r=events().find(([k,b])=>k==c.dataset.k&&b.status!="blocked");if(r)openEv(r[0])}}});
+function setMode(md){mode=md;try{history.replaceState(null,"",md=="season"?"#season":location.pathname+location.search)}catch(e){}render()}
+$("#vMonth").onclick=()=>setMode("month");$("#vSeason").onclick=()=>setMode("season");
+addEventListener("hashchange",()=>{const md=location.hash=="#season"?"season":"month";if(md!=mode){mode=md;render()}});
 $("#cal").addEventListener("click",e=>{const ev=e.target.closest(".ev");if(ev){openEv(ev.dataset.k);return}
   const c=e.target.closest(".c");if(c&&innerWidth<=760){const r=(events().find(([k,b])=>k==c.dataset.k&&b.status!="blocked"));if(r)openEv(r[0])}});
 $("#agenda").addEventListener("click",e=>{const it=e.target.closest(".it");if(it)openEv(it.dataset.k)});
@@ -195,9 +245,9 @@ function ics(k,b,st){const f=d=>d.toISOString().replace(/[-:]/g,"").replace(/\.\
     `SUMMARY:${t("JATF – "+head(b))}`,`DESCRIPTION:${t(`${b.type} ${b.era}${b.map?" · "+b.map:""}\nMission editor: ${b.discord}${b.notes?"\n"+b.notes:""}`)}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");
   const u=URL.createObjectURL(new Blob([txt],{type:"text/calendar"}));const a=document.createElement("a");a.href=u;a.download=`JATF-${k}.ics`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}
 
-$("#prev").onclick=()=>{view.m--;if(view.m<0){view.m=11;view.y--}render()};
-$("#nextM").onclick=()=>{view.m++;if(view.m>11){view.m=0;view.y++}render()};
-$("#today").onclick=()=>{view={y:now0.getUTCFullYear(),m:now0.getUTCMonth()};render()};
+$("#prev").onclick=()=>{if(mode=="season"){sy--;render();return}view.m--;if(view.m<0){view.m=11;view.y--}render()};
+$("#nextM").onclick=()=>{if(mode=="season"){sy++;render();return}view.m++;if(view.m>11){view.m=0;view.y++}render()};
+$("#today").onclick=()=>{if(mode=="season"){sy=curSeason();render();return}view={y:now0.getUTCFullYear(),m:now0.getUTCMonth()};render()};
 
 async function load(){
   if(!API_URL){B=SEED;const n=$("#note");n.hidden=false;n.textContent="Demo data — set API_URL to show live bookings from the JATF sheet.";render();return}
