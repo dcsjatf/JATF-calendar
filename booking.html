@@ -98,6 +98,10 @@ td.n{white-space:nowrap}
 .pill.pending{border:1px solid var(--gold);color:var(--gold)}
 .pill.confirmed{background:var(--red);color:#fff}
 .pill.blocked{background:#2a3754;color:var(--mut)}
+.pill.cancelled{border:1px solid #ff8a8d;color:#ff8a8d;text-decoration:line-through}
+.canc-row td{opacity:.6}.canc-row td:last-child{opacity:1}
+.d.canc{color:#ff8a8d;text-decoration:line-through}
+.sb.warn:hover{border-color:#ff8a8d;color:#ff8a8d}
 .acts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
 .sb{min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:14px}
 .sb:hover{border-color:var(--gold)}
@@ -222,7 +226,7 @@ try{pin=sessionStorage.getItem("jatf-pin")||""}catch(e){}
 /* demo mode: data lives only in this browser */
 function localLoad(){let o=null;try{o=JSON.parse(LS("jatf-demo")||"null")}catch(e){}if(!o){o={};for(const k in SEED)o[k]={...SEED[k],createdBy:""}}return o}
 function localDo(action,p){const o=localLoad();const cur=o[p.date];
-  if(action=="save"){if(p.date!==p.editing&&o[p.date])throw{code:"taken"};const prev=p.editing?o[p.editing]:null;
+  if(action=="save"){if(p.date!==p.editing&&o[p.date]&&o[p.date].status!="cancelled")throw{code:"taken"};const prev=p.editing?o[p.editing]:null;
     o[p.date]=p.blank?{status:"blocked",title:p.data.title||p.data.notes,createdBy:me,createdAt:Date.now()}:{...p.data,status:prev&&p.editing==p.date?prev.status:(staff?"confirmed":"pending"),createdBy:prev?prev.createdBy:me,createdAt:prev?prev.createdAt:Date.now()};
     if(p.editing&&p.editing!==p.date)delete o[p.editing]}
   if(action=="status"&&cur)cur.status=p.status;
@@ -281,9 +285,9 @@ function renderBoard(){
     let cnt=0,cells="";
     for(let i=0;i<off;i++)cells+="<span></span>";
     for(let d=1;d<=n;d++){const k=iso(y,m+1,d);const b=B[k];let c="d";
-      if(b){c+=b.status=="confirmed"?" conf":b.status=="blocked"?" blk":" pend";if(b.status!="blocked")cnt++}
+      if(b){c+=b.status=="confirmed"?" conf":b.status=="blocked"?" blk":b.status=="cancelled"?" canc":" pend";if(b.status=="confirmed"||b.status=="pending")cnt++}
       if(k<TODAY)c+=" past";if(k==TODAY)c+=" today";if(k==sel)c+=" sel";
-      const tip=b?(b.status=="blocked"?"Blank":`${b.type} ${b.era} · ${b.discord} · ${b.time}Z (${b.status})`):"Free";
+      const tip=b?(b.status=="blocked"?"Blank":b.status=="cancelled"?`Cancelled (${b.discord}) — free to book`:`${b.type} ${b.era} · ${b.discord} · ${b.time}Z (${b.status})`):"Free";
       cells+=`<button type="button" class="${c}" data-d="${k}" title="${esc(k+" — "+tip)}" aria-label="${esc(k+" "+tip)}">${d}</button>`}
     return`<div class="mon"><h3>${MN[m]} ${y}<small>${cnt?cnt+" mission"+(cnt>1?"s":""):""}</small></h3><div class="dw">${["M","T","W","T","F","S","S"].map(x=>`<span>${x}</span>`).join("")}</div><div class="days">${cells}</div></div>`}).join("");
 }
@@ -291,16 +295,16 @@ $("#months").addEventListener("click",e=>{const b=e.target.closest(".d");if(!b)r
   sel=b.dataset.d;$("#fDate").value=sel;checkAvail();renderBoard();
   if(innerWidth<900)$("#form").scrollIntoView({behavior:"smooth"})});
 
-function nearest(d){const ks=Object.keys(B).filter(k=>k!=d&&B[k].status!="blocked"&&(!editing||k!=editing));const t=parse(d);
+function nearest(d){const ks=Object.keys(B).filter(k=>k!=d&&B[k].status!="blocked"&&B[k].status!="cancelled"&&(!editing||k!=editing));const t=parse(d);
   return ks.map(k=>({k,diff:Math.round((parse(k)-t)/864e5)})).filter(x=>Math.abs(x.diff)<=3).sort((a,b)=>Math.abs(a.diff)-Math.abs(b.diff))}
 
 function checkAvail(){const d=$("#fDate").value;const box=$("#avail");sel=d||null;
   if(!d){box.className="avail";box.textContent="Pick a date, or tap a day on the season board.";updSubmit(false);return}
   const b=B[d];let html="",cls="avail",ok=true;
-  if(b&&d!==editing){ok=false;cls+=" taken";
+  if(b&&d!==editing&&b.status!="cancelled"){ok=false;cls+=" taken";
     html=b.status=="blocked"?`<b>${fmtDate(d)} is marked BLANK by staff.</b><small>${esc(b.title||"No event planned on this date.")}</small>`
       :`<b>${fmtDate(d)} is already booked</b><small>${esc(b.type)} ${esc(b.era)}${b.map?" · "+esc(b.map):""} by ${esc(b.discord)} at ${esc(b.time)}Z — ${b.status}</small>`}
-  else{cls+=" free";html=`✓ ${fmtDate(d)} is free`;
+  else{cls+=" free";html=`✓ ${fmtDate(d)} is free`;if(b&&b.status=="cancelled"&&d!==editing)html+=`<small>${esc(b.discord)}'s mission on this date was cancelled — booking it will replace it.</small>`;
     const nb=nearest(d);if(nb.length){const x=nb[0];const o=B[x.k];html+=`<small>Heads-up: ${esc(o.discord)}'s ${esc(o.type)} mission is ${Math.abs(x.diff)} day${Math.abs(x.diff)>1?"s":""} ${x.diff>0?"after":"before"} (${fmtDate(x.k)}).</small>`}}
   if(ok&&!inSeason(d))html+=`<small>Outside the ${$("#sLbl").textContent} season.</small>`;
   if(ok&&d<TODAY){ok=false;cls="avail taken";html=`<b>${fmtDate(d)} is in the past.</b>`}
@@ -311,8 +315,10 @@ $("#fDate").addEventListener("input",checkAvail);
 
 /* schedule */
 function actions(d,b){if(!canManage(b))return"";let h="";
-  if(staff&&b.status!="blocked")h+=`<button class="sb" data-a="toggle" data-d="${d}">${b.status=="confirmed"?"Unconfirm":"Confirm"}</button>`;
-  if(b.status!="blocked")h+=`<button class="sb" data-a="edit" data-d="${d}">Edit</button>`;
+  const canc=b.status=="cancelled";
+  if(staff&&b.status!="blocked"&&!canc)h+=`<button class="sb" data-a="toggle" data-d="${d}">${b.status=="confirmed"?"Unconfirm":"Confirm"}</button>`;
+  if(staff&&b.status!="blocked")h+=canc?`<button class="sb" data-a="restore" data-d="${d}">Restore</button>`:`<button class="sb warn" data-a="cancel" data-d="${d}">Cancel</button>`;
+  if(b.status!="blocked"&&!canc)h+=`<button class="sb" data-a="edit" data-d="${d}">Edit</button>`;
   h+=`<button class="sb del" data-a="del" data-d="${d}">Delete</button>`;return`<div class="acts">${h}</div>`}
 function renderSchedule(){$("#schTitle").textContent=`Season ${$("#sLbl").textContent}`;
   const L=list();if(!L.length){$("#schWrap").innerHTML=`<div class="card empty">${loaded?"No missions booked this season yet. Be the first — head to Book.":"Loading bookings…"}</div>`;return}
@@ -320,25 +326,30 @@ function renderSchedule(){$("#schTitle").textContent=`Season ${$("#sLbl").textCo
   for(const[d,b]of L){const t=parse(d);const mk=MN[t.getUTCMonth()]+" "+t.getUTCFullYear();
     if(mk!=lastM){rows+=`<tr class="mh"><td colspan="6">${mk}</td></tr>`;lastM=mk}
     const blk=b.status=="blocked";
-    rows+=`<tr><td class="n" data-l="Date"><b>${fmtDate(d)}</b></td><td class="n" data-l="Time">${blk?"—":esc(b.time)+"Z"}</td>
+    rows+=`<tr${b.status=="cancelled"?' class="canc-row"':""}><td class="n" data-l="Date"><b>${fmtDate(d)}</b></td><td class="n" data-l="Time">${blk?"—":esc(b.time)+"Z"}</td>
     <td data-l="Mission">${blk?"BLANK"+(b.title?" · "+esc(b.title):""):`${esc(b.type)} ${esc(b.era)}${b.map?" · "+esc(b.map):""}${b.title?`<br><small style="color:var(--mut)">${esc(b.title)}</small>`:""}`}</td>
     <td data-l="Editor"><span class="who">${blk?"Staff":esc(b.discord)}</span></td>
     <td data-l="Status"><span class="pill ${esc(b.status)}">${blk?"blank":esc(b.status)}</span></td><td data-l="">${actions(d,b)}</td></tr>`}
   $("#schWrap").innerHTML=`<div class="card" style="padding:6px 10px"><table class="stack"><thead><tr><th>Date</th><th>Time</th><th>Mission</th><th>Editor</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
 $("#schWrap").addEventListener("click",async e=>{const btn=e.target.closest("[data-a]");if(!btn)return;const d=btn.dataset.d,b=B[d];if(!b)return;
   if(btn.dataset.a=="toggle")await safe(()=>api("status",{date:d,status:b.status=="confirmed"?"pending":"confirmed"}),b.status=="confirmed"?"Set back to pending":"Mission confirmed");
+  if(btn.dataset.a=="cancel")askCancel(d);
+  if(btn.dataset.a=="restore")await safe(()=>api("status",{date:d,status:"confirmed"}),"Mission restored");
   if(btn.dataset.a=="edit")startEdit(d);
   if(btn.dataset.a=="del")askDel(d)});
 $("#copyTxt").addEventListener("click",async()=>{const L=list().filter(([,b])=>b.status!="blocked");
   let txt=`**JATF EVENT SCHEDULE — SEASON ${$("#sLbl").textContent}**\n`,lm="";
   for(const[d,b]of L){const t=parse(d);const mk=MN[t.getUTCMonth()].toUpperCase();if(mk!=lm){txt+=`\n__${mk}__\n`;lm=mk}
-    txt+=`${fmtDate(d)} · ${b.time}Z · ${b.type} ${b.era}${b.map?" · "+b.map:""} — by ${b.discord}${b.status=="pending"?" (pending)":""}\n`}
+    txt+=`${fmtDate(d)} · ${b.time}Z · ${b.type} ${b.era}${b.map?" · "+b.map:""} — by ${b.discord}${b.status=="pending"?" (pending)":b.status=="cancelled"?" — **CANCELLED**":""}\n`}
   try{await navigator.clipboard.writeText(txt);toast("Schedule copied — paste it in Discord")}catch(e){toast("Copy not allowed here",1)}});
 
 /* delete dialog */
-let delD=null;function askDel(d){delD=d;const b=B[d];$("#dB").textContent=`${fmtDate(d)} — ${b.status=="blocked"?"BLANK date":b.type+" "+b.era+" by "+b.discord}`;$("#dlg").classList.add("on");$("#dOk").focus()}
+let delD=null,dlgMode="del";
+function askCancel(d){delD=d;dlgMode="cancel";const b=B[d];$("#dT").textContent="Cancel this mission?";$("#dOk").textContent="Cancel mission";$("#dNo").textContent="Keep it";
+  $("#dB").textContent=`${fmtDate(d)} — ${b.type} ${b.era} by ${b.discord}. It stays on the calendar marked CANCELLED, and the date becomes free to book again.`;$("#dlg").classList.add("on");$("#dOk").focus()}
+function askDel(d){delD=d;dlgMode="del";$("#dT").textContent="Delete booking?";$("#dOk").textContent="Delete";$("#dNo").textContent="Keep";const b=B[d];$("#dB").textContent=`${fmtDate(d)} — ${b.status=="blocked"?"BLANK date":b.type+" "+b.era+" by "+b.discord}`;$("#dlg").classList.add("on");$("#dOk").focus()}
 $("#dNo").addEventListener("click",()=>$("#dlg").classList.remove("on"));
-$("#dOk").addEventListener("click",async()=>{$("#dlg").classList.remove("on");if(delD){const d=delD;delD=null;await safe(()=>api("delete",{date:d}),"Booking deleted");if(editing==d)stopEdit()}});
+$("#dOk").addEventListener("click",async()=>{$("#dlg").classList.remove("on");if(delD){const d=delD;delD=null;if(dlgMode=="cancel"){await safe(()=>api("status",{date:d,status:"cancelled"}),"Mission cancelled");return}await safe(()=>api("delete",{date:d}),"Booking deleted");if(editing==d)stopEdit()}});
 
 /* edit */
 function setRadio(n,v){const r=document.querySelector(`input[name=${n}][value="${v}"]`);if(r)r.checked=true}

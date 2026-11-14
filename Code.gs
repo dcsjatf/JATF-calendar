@@ -92,7 +92,7 @@ function doPost(e) {
       if (editing && !prev) return fail('gone');
       if (prev && !(isStaff || prev.createdBy === token)) return fail('forbidden');
       if (body.blank && !isStaff) return fail('forbidden');
-      if (all[date] && date !== editing) return fail('taken');
+      if (all[date] && date !== editing && all[date].status !== 'cancelled') return fail('taken');
       const d = body.data || {};
       if (!body.blank && !String(d.discord || '').trim()) return fail('bad');
       const rec = body.blank
@@ -104,8 +104,12 @@ function doPost(e) {
             createdAt: prev ? prev.createdAt : Date.now()
           };
       const row = rowOf_(date, rec);
+      const target = all[date];
       if (prev && editing === date) {
         s.getRange(prev.row, 1, 1, COLS.length).setValues([row]);
+      } else if (target) {                       // replaces a cancelled mission
+        s.getRange(target.row, 1, 1, COLS.length).setValues([row]);
+        if (prev) s.deleteRow(prev.row);
       } else {
         s.appendRow(row);
         if (prev) s.deleteRow(prev.row);
@@ -113,7 +117,7 @@ function doPost(e) {
     } else if (body.action === 'status') {
       if (!isStaff) return fail('forbidden');
       const r = all[date]; if (!r) return fail('gone');
-      const st = ['pending', 'confirmed'].indexOf(body.status) >= 0 ? body.status : 'pending';
+      const st = ['pending', 'confirmed', 'cancelled'].indexOf(body.status) >= 0 ? body.status : 'pending';
       s.getRange(r.row, COLS.indexOf('status') + 1).setValue(st);
     } else if (body.action === 'delete') {
       const r = all[date]; if (!r) return fail('gone');
@@ -229,11 +233,12 @@ function updateDiscord_(all) {
     const p = k.split('-').map(Number);
     return { k: k, r: r, ts: Date.UTC(p[0], p[1] - 1, p[2], Number(t[0]) || 0, Number(t[1]) || 0) };
   }).filter(x => x.r.status !== 'blocked' && x.ts > now - 3 * 3600e3);
-  const conf = list.filter(x => x.r.status === 'confirmed');
+  const conf = list.filter(x => x.r.status === 'confirmed' || x.r.status === 'cancelled');
   const pend = list.filter(x => x.r.status === 'pending').length;
   const desc = conf.slice(0, 10).map(x => {
     const r = x.r, u = Math.floor(x.ts / 1000);
     const name = r.title || r.map || (r.type + ' mission');
+    if (r.status === 'cancelled') return '❌ ~~<t:' + u + ':F>~~ · **CANCELLED**\n~~' + name + '~~ — ' + r.type + ' · by ' + r.discord;
     return (ICON[r.type] || '⚪') + ' **<t:' + u + ':F>** · <t:' + u + ':R>\n' +
       '**' + name + '** — ' + r.type + ' ' + r.era + (r.map && r.title ? ' · ' + r.map : '') +
       ' · ' + r.time + 'Z · by ' + r.discord;
