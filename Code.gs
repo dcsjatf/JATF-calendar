@@ -83,6 +83,13 @@ function doPost(e) {
 
     if (body.action === 'checkPin') return isStaff ? json_({ ok: true }) : fail('badpin');
 
+    // Called by the GitHub "Discord poster" workflow after a new poster.png is online
+    if (body.action === 'discord') {
+      if (body.v) PropertiesService.getScriptProperties().setProperty('DISCORD_IMG_V', String(body.v).replace(/[^a-z0-9]/gi, '').slice(0, 40));
+      updateDiscord_(all);
+      return json_({ ok: true });
+    }
+
     const date = String(body.date || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad');
 
@@ -243,19 +250,25 @@ function updateDiscord_(all) {
       '**' + name + '** — ' + r.type + ' ' + r.era + (r.map && r.title ? ' · ' + r.map : '') +
       ' · ' + r.time + 'Z · by ' + r.discord;
   }).join('\n\n') || '_No missions scheduled yet._';
-  const extra = (conf.length > 10 ? '\n\n…and ' + (conf.length - 10) + ' more this season.' : '') +
-    (pend ? '\n\n⏳ ' + pend + ' booking request' + (pend > 1 ? 's' : '') + ' waiting for staff approval.' : '');
-  const payload = {
-    username: 'JATF Schedule',
-    embeds: [{
-      title: '📅 JATF — Upcoming missions',
-      url: CAL_URL,
-      color: 0xffc000,
-      description: (desc + extra + '\n\n[Open the full calendar](' + CAL_URL + ') · [Book a mission](' + CAL_URL + 'booking.html)').slice(0, 4000),
-      footer: { text: 'Times shown in your local time zone · updated' },
-      timestamp: new Date().toISOString()
-    }]
+  const v = props.getProperty('DISCORD_IMG_V');
+  const month = Utilities.formatDate(new Date(), 'UTC', 'MMMM yyyy');
+  const embed = {
+    title: '📅 JATF Event Schedule — ' + month,
+    url: CAL_URL,
+    color: 0xffc000,
+    footer: { text: 'Updated' },
+    timestamp: new Date().toISOString()
   };
+  if (v) {
+    // Poster of the current month, rendered by the GitHub workflow (same as the portal's poster)
+    embed.image = { url: CAL_URL + 'poster.png?v=' + v };
+    embed.description = '[Open the full calendar](' + CAL_URL + ')';
+  } else {
+    // Fallback until the first poster exists: text list
+    embed.description = (desc + (conf.length > 10 ? '\n\n…and ' + (conf.length - 10) + ' more this season.' : '') +
+      '\n\n[Open the full calendar](' + CAL_URL + ')').slice(0, 4000);
+  }
+  const payload = { username: 'JATF Schedule', embeds: [embed] };
   const opt = { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true };
   const id = props.getProperty('DISCORD_MSG_ID');
   if (id) {
@@ -283,5 +296,6 @@ SETUP (10 minutes)
 7. Discord (optional): Script Properties → add DISCORD_WEBHOOK = the channel webhook URL.
    Run "setupDiscord" once (authorize). It posts the schedule message; pin it.
    The message updates itself on every booking change and every hour.
+   The poster image comes from the GitHub workflow "Discord poster" (runs every 15 minutes).
 After changing this code, use Deploy → Manage deployments → Edit → Version: New version, so the URL stays the same.
 */

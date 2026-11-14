@@ -1,0 +1,55 @@
+name: Discord poster
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # checks the bookings every 15 minutes
+  workflow_dispatch:          # "Run workflow" button for a manual refresh
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poster
+  cancel-in-progress: false
+
+jobs:
+  poster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.48.2
+          npx playwright install --with-deps chromium
+
+      - name: Render current month poster
+        id: r
+        run: node scripts/render-poster.mjs
+
+      - name: Commit poster
+        if: steps.r.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add poster.png
+          git commit -m "Update Discord poster (${{ steps.r.outputs.v }})"
+          git push
+
+      - name: Wait for GitHub Pages and refresh the Discord message
+        if: steps.r.outputs.changed == 'true'
+        run: |
+          WANT=$(sha1sum poster.png | cut -c1-40)
+          for i in $(seq 1 40); do
+            GOT=$(curl -fsSL "https://dcsjatf.github.io/JATF-calendar/poster.png?nocache=$i$RANDOM" | sha1sum | cut -c1-40 || true)
+            [ "$GOT" = "$WANT" ] && break
+            sleep 15
+          done
+          API=$(grep -o 'https://script.google.com/macros/s/[^"]*/exec' booking.html | head -1)
+          curl -fsSL -X POST -H 'Content-Type: text/plain;charset=utf-8' \
+            -d "{\"action\":\"discord\",\"v\":\"${{ steps.r.outputs.v }}\"}" "$API" | head -c 300
