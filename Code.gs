@@ -132,242 +132,81 @@ function doPost(e) {
   }
 }
 
-/** Run ONCE from the editor: loads the 2026–27 bookings already in the form responses. */
-function setupSeed() {
+/* ===== IMPORT FROM THE GOOGLE FORM RESPONSES ===== */
+
+// Run ONCE from the editor: copies every form response into the Bookings tab (as confirmed).
+function importFromForm() { return import_('confirmed'); }
+
+// Installed as a "From spreadsheet – On form submit" trigger: new form requests arrive as pending.
+function onFormSubmit(e) { import_('pending'); }
+
+function import_(status) {
+  const ss = SpreadsheetApp.getActive();
+  const src = ss.getSheets().find(sh => sh.getName() !== SHEET &&
+    sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getDisplayValues()[0]
+      .some(h => /DATE REQUESTED/i.test(h)));
+  if (!src) throw new Error('Form responses tab not found (no "DATE REQUESTED" column).');
+  const vals = src.getDataRange().getValues();
+  const disp = src.getDataRange().getDisplayValues();
+  const head = disp[0].map(h => String(h).toUpperCase().trim());
+  const col = re => head.findIndex(h => re.test(h));
+  const C = {
+    ts: 0, discord: col(/DISCORD/), title: col(/MISSION TITLE/), type: col(/MISSION TYPE/),
+    era: col(/PLAYSET|ERA/), date: col(/DATE REQUESTED/), time: col(/^TIME/), notes: col(/^NOTES?$/)
+  };
+  const tz = ss.getSpreadsheetTimeZone();
   const s = sheet_();
-  if (s.getLastRow() > 1) throw new Error('Bookings tab is not empty — seed skipped.');
-  const seed = [
- {
-  "date": "2026-09-14",
-  "discord": "ienatom",
-  "title": "",
-  "type": "PvEvP",
-  "era": "Modern",
-  "map": "",
-  "time": "19:00",
-  "notes": "",
-  "createdAt": 1787148433000
- },
- {
-  "date": "2026-10-11",
-  "discord": "NightFlier",
-  "title": "VIETNAM WAR Rolling Thunder 2",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "18:45",
-  "notes": "",
-  "createdAt": 1789404793000
- },
- {
-  "date": "2026-10-19",
-  "discord": "Raccoon",
-  "title": "Damascus Shield Campaign",
-  "type": "PvE",
-  "era": "Cold War / Modern",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1784389281000
- },
- {
-  "date": "2026-11-02",
-  "discord": "Raccoon",
-  "title": "Damascus Shield Campaign",
-  "type": "PvE",
-  "era": "Cold War / Modern",
-  "map": "",
-  "time": "19:00",
-  "notes": "",
-  "createdAt": 1784389369000
- },
- {
-  "date": "2026-11-16",
-  "discord": "Raccoon",
-  "title": "Damascus Shield Campaign",
-  "type": "PvE",
-  "era": "Cold War / Modern",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1784389405000
- },
- {
-  "date": "2026-11-18",
-  "discord": "Night Flier",
-  "title": "VIETNAM WAR Rolling Thunder 3",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "19:45",
-  "notes": "",
-  "createdAt": 1792416792000
- },
- {
-  "date": "2026-11-23",
-  "discord": "Grampa",
-  "title": "",
-  "type": "PvE",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "Not available yet (two part Mission)",
-  "createdAt": 1784178543000
- },
- {
-  "date": "2026-11-30",
-  "discord": "Raccoon",
-  "title": "Damascus Shield Campaign",
-  "type": "PvE",
-  "era": "Cold War / Modern",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1784389443000
- },
- {
-  "date": "2026-12-14",
-  "discord": "Raccoon",
-  "title": "Damascus Shield Campaign",
-  "type": "PvE",
-  "era": "Cold War / Modern",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1784389470000
- },
- {
-  "date": "2026-12-16",
-  "discord": "I/JG7_Killerfliege",
-  "title": "To Paris and back - Hell above the Clouds",
-  "type": "PvEvP",
-  "era": "WW2",
-  "map": "",
-  "time": "19:30",
-  "notes": "changed 14 to 16",
-  "createdAt": 1786957130000
- },
- {
-  "date": "2027-01-18",
-  "discord": "Grampa",
-  "title": "",
-  "type": "PvE",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "Not available yet (second part of Mission)",
-  "createdAt": 1784178586000
- },
- {
-  "date": "2027-02-01",
-  "discord": "fuke3853",
-  "title": "Operation Spider Web",
-  "type": "PvE",
-  "era": "Modern",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1784464296000
- },
- {
-  "date": "2027-02-08",
-  "discord": "Accipiter",
-  "title": "Levantine Ghost 2.0",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1788350316000
- },
- {
-  "date": "2027-02-15",
-  "discord": "George “Gonzo”Cerrone",
-  "title": "Iron Tide",
-  "type": "PvE",
-  "era": "Modern",
-  "map": "",
-  "time": "19:30",
-  "notes": "",
-  "createdAt": 1787218555000
- },
- {
-  "date": "2027-02-22",
-  "discord": "Accipiter",
-  "title": "Levantine Ghost 2.0",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1788350347000
- },
- {
-  "date": "2027-03-01",
-  "discord": "Grampa",
-  "title": "",
-  "type": "PvE",
-  "era": "Modern",
-  "map": "",
-  "time": "19:15",
-  "notes": "changed from 22/02",
-  "createdAt": 1794416546000
- },
- {
-  "date": "2027-03-08",
-  "discord": "Accipiter",
-  "title": "Levantine Ghost 2.0",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1788350384000
- },
- {
-  "date": "2027-03-22",
-  "discord": "Accipiter",
-  "title": "Levantine Ghost 2.0",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1788350484000
- },
- {
-  "date": "2027-04-05",
-  "discord": "Accipiter",
-  "title": "Levantine Ghost 2.0",
-  "type": "PvP",
-  "era": "Cold War",
-  "map": "",
-  "time": "20:00",
-  "notes": "",
-  "createdAt": 1788350525000
- },
- {
-  "date": "2027-04-19",
-  "discord": "fuke3853",
-  "title": "Operation Mongoose",
-  "type": "PvE",
-  "era": "Modern",
-  "map": "",
-  "time": "19:00",
-  "notes": "",
-  "createdAt": 1789479968000
- }
-];
-  seed.forEach(r => s.appendRow(rowOf_(r.date, Object.assign({ status: 'confirmed', createdBy: '', createdAt: r.createdAt }, r))));
+  const have = readAll_();
+  let added = 0, skipped = [];
+  for (let i = 1; i < vals.length; i++) {
+    const v = vals[i], d = disp[i];
+    const date = toDate_(v[C.date], d[C.date], tz);
+    if (!date) continue;
+    const discord = String(d[C.discord] || '').trim();
+    if (!discord) continue;
+    if (have[date]) { if (have[date].discord !== discord) skipped.push(date + ' (' + discord + ')'); continue; }
+    const tm = (String(d[C.time]).match(/(\d{1,2})[.:](\d{2})/) || []);
+    const time = tm.length ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : '20:00';
+    let title = C.title >= 0 ? String(d[C.title]).trim() : '';
+    let notes = C.notes >= 0 ? String(d[C.notes]).replace(/\*/g, '').trim() : '';
+    if (/^tbd$/i.test(title)) title = '';
+    if (/^not available/i.test(title)) { notes = title + (notes ? '; ' + notes : ''); title = ''; }
+    const rec = {
+      discord: discord, title: title, type: String(d[C.type] || 'PvE').trim(),
+      era: era_(d[C.era]), map: '', time: time, notes: notes, status: status, createdBy: '',
+      createdAt: v[C.ts] instanceof Date ? v[C.ts].getTime() : Date.now()
+    };
+    s.appendRow(rowOf_(date, rec));
+    have[date] = { discord: discord };
+    added++;
+  }
+  const msg = 'Imported ' + added + ' booking(s).' + (skipped.length ? ' Date already taken, skipped: ' + skipped.join(', ') : '');
+  Logger.log(msg);
+  return msg;
+}
+
+function toDate_(v, shown, tz) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  const m = String(shown || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);   // dd/mm/yyyy
+  return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : null;
+}
+
+function era_(x) {
+  const t = String(x || '');
+  const cw = /cold war/i.test(t), mod = /modern/i.test(t), ww2 = /ww2|wwii/i.test(t);
+  return cw && mod ? 'Cold War / Modern' : mod ? 'Modern' : cw ? 'Cold War' : ww2 ? 'WW2' : t.trim();
 }
 
 /*
 SETUP (10 minutes)
 1. Open the JATF spreadsheet → Extensions → Apps Script. Paste this whole file as Code.gs and save.
 2. Project Settings (gear) → Script Properties → Add: STAFF_PIN = a PIN you share only with staff.
-3. Select the function "setupSeed" and press Run (authorize when asked). A "Bookings" tab appears with the season's missions.
-4. Deploy → New deployment → type "Web app" → Execute as: Me → Who has access: Anyone → Deploy.
-5. Copy the Web app URL (ends with /exec) and paste it into API_URL near the top of the script in JATF-mission-booking.html.
-6. Host the HTML anywhere (GitHub Pages, your website, Discord file) — everyone sees the same bookings.
+3. Select the function "importFromForm" and press Run (authorize when asked).
+   A "Bookings" tab appears with every mission from the form responses.
+4. Optional, to keep the Google Form working too: Triggers (alarm clock) → Add trigger →
+   function onFormSubmit · event source "From spreadsheet" · event type "On form submit" → Save.
+   New form requests then show up in the portal as pending.
+5. Deploy → New deployment → type "Web app" → Execute as: Me → Who has access: Anyone → Deploy.
+6. Copy the Web app URL (ends with /exec) into API_URL in index.html and booking.html.
 After changing this code, use Deploy → Manage deployments → Edit → Version: New version, so the URL stays the same.
 */

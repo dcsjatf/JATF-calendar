@@ -7,7 +7,8 @@
 ## Setup
 1. In the JATF Google Sheet: Extensions → Apps Script → paste `Code.gs`, save.
 2. Project Settings → Script Properties → add `STAFF_PIN`.
-3. Run `setupSeed` once (authorize when asked).
+3. Run `importFromForm` once (authorize when asked): it copies the Google Form responses into the "Bookings" tab.
+   Optional: add a trigger `onFormSubmit` (From spreadsheet → On form submit) so new form responses arrive as pending.
 4. Deploy → New deployment → Web app → Execute as: Me → Who has access: Anyone.
 5. Copy the `/exec` URL into `API_URL` near the top of the script in **both** `index.html` and `booking.html`.
 6. Repo Settings → Pages → Source: Deploy from a branch → `main` / root.
