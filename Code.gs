@@ -136,6 +136,7 @@ function doPost(e) {
     SpreadsheetApp.flush();
     all = readAll_();
     try { updateDiscord_(all); } catch (err) { Logger.log('Discord: ' + err); }
+    try { triggerPoster_(); } catch (err) { Logger.log('GitHub: ' + err); }
     return json_({ ok: true, bookings: public_(all, token) });
   } catch (err) {
     return json_({ ok: false, error: 'server', message: String(err) });
@@ -150,7 +151,7 @@ function doPost(e) {
 function importFromForm() { return import_('confirmed'); }
 
 // Installed as a "From spreadsheet – On form submit" trigger: new form requests arrive as pending.
-function onFormSubmit(e) { import_('pending'); try { updateDiscord_(); } catch (err) { Logger.log('Discord: ' + err); } }
+function onFormSubmit(e) { import_('pending'); try { updateDiscord_(); } catch (err) { Logger.log('Discord: ' + err); } try { triggerPoster_(); } catch (err) { Logger.log('GitHub: ' + err); } }
 
 function import_(status) {
   const ss = SpreadsheetApp.getActive();
@@ -314,6 +315,25 @@ function send_(hook, payload, props) {
   props.setProperty(key, JSON.parse(res.getContentText()).id);
 }
 
+/* ===== GITHUB: redraw the poster right after a change ===== */
+// Needs Script Property GITHUB_TOKEN: a fine-grained token for dcsjatf/JATF-calendar with "Actions: Read and write".
+// Without it the poster still updates, but only when GitHub runs its 15-minute schedule (which can lag a lot).
+const GH_REPO = 'dcsjatf/JATF-calendar';
+
+function triggerPoster_() {
+  const tok = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  if (!tok) return;
+  const res = UrlFetchApp.fetch('https://api.github.com/repos/' + GH_REPO + '/actions/workflows/poster.yml/dispatches', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' },
+    payload: JSON.stringify({ ref: 'main' })
+  });
+  if (res.getResponseCode() >= 300) throw new Error(res.getResponseCode() + ' ' + res.getContentText());
+}
+
+// Run from the editor to test the token: the "Discord poster" action should start on GitHub.
+function testPosterTrigger() { triggerPoster_(); Logger.log('Poster update requested on GitHub.'); }
+
 /*
 SETUP (10 minutes)
 1. Open the JATF spreadsheet → Extensions → Apps Script. Paste this whole file as Code.gs and save.
@@ -330,5 +350,7 @@ SETUP (10 minutes)
    Run "setupDiscord" once (authorize). It posts the schedule message; pin it.
    The message updates itself on every booking change and every hour.
    The poster image comes from the GitHub workflow "Discord poster" (runs every 15 minutes).
+8. Instant poster updates (optional): Script Properties → add GITHUB_TOKEN (fine-grained token,
+   repository dcsjatf/JATF-calendar, permission Actions: Read and write). Run testPosterTrigger once.
 After changing this code, use Deploy → Manage deployments → Edit → Version: New version, so the URL stays the same.
 */
