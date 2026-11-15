@@ -33,6 +33,7 @@ button,select{font:inherit;color:inherit}
 .brand h1{margin:0;font:800 clamp(20px,3vw,28px)/1.05 Montserrat,sans-serif;color:var(--gold)}
 .brand h1 span{color:var(--red)}
 .tz{font-size:14px;color:var(--mut)}
+#sub{min-height:40px;padding:8px 16px}
 .wrap{max-width:1320px;margin:0 auto;padding:clamp(18px,3vw,36px) max(4vw,16px)}
 .next{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px 28px;align-items:center;background:linear-gradient(100deg,#132443,#0e1a30);border:1px solid var(--line);border-left:6px solid var(--gold);border-radius:14px;padding:18px 22px;margin-bottom:24px}
 .next .k{font-size:14px;color:var(--mut)}
@@ -120,6 +121,7 @@ button,select{font:inherit;color:inherit}
 <header class="top">
   <div class="brand"><img id="logo" alt="JATF logo"><h1>JATF <span>Event Calendar</span></h1></div>
   <div class="tz" id="tz"></div>
+  <button class="btn" id="sub" type="button">Subscribe</button>
 </header>
 <main class="wrap">
   <div class="note" id="note" hidden></div>
@@ -244,10 +246,26 @@ function openEv(k){const b=B[k];if(!b||b.status=="blocked")return;const st=start
   <dl class="kv"><dt>Date</dt><dd>${esc(st.toLocaleDateString([], {weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}))}</dd>
   <dt>Time</dt><dd>${esc(b.time)} Zulu<br><span style="color:var(--mut)">${esc(locDay(st))}, ${esc(loc(st))} your time</span></dd>
   ${b.map?`<dt>Map</dt><dd>${esc(b.map)}</dd>`:""}<dt>Mission editor</dt><dd class="who">${esc(b.discord)}</dd>${b.notes?`<dt>Notes</dt><dd>${esc(b.notes)}</dd>`:""}</dl>
-  ${b.status=="cancelled"?`<p style="color:#ff8a8d;margin:0 0 8px">This mission has been cancelled by JATF staff.</p><div class="btns"><button class="btn ghost" id="cls">Close</button></div>`:`<div class="btns"><a class="btn" id="gcal" href="${gcal(k,b,st)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Google Calendar</a><button class="btn ghost" id="ics">Download .ics</button><button class="btn ghost" id="cls">Close</button></div>`}`;
+  ${b.status=="cancelled"?`<p style="color:#ff8a8d;margin:0 0 8px">This mission has been cancelled by JATF staff.</p><div class="btns"><button class="btn ghost" id="cls">Close</button></div>`:`<div class="btns"><a class="btn" id="gcal" href="${gcal(k,b,st)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Google Calendar</a><a class="btn ghost" id="ics" href="${API_URL?esc(API_URL+"?ics="+k):"#"}" style="text-decoration:none;display:inline-flex;align-items:center">Apple Calendar</a><button class="btn ghost" id="cls">Close</button></div>`}`;
   $("#dlg").classList.add("on");($("#gcal")||$("#cls")).focus();
-  $("#cls").onclick=close;if($("#ics"))$("#ics").onclick=()=>ics(k,b,st)}
+  $("#cls").onclick=close;if($("#ics")&&!API_URL)$("#ics").onclick=e=>{e.preventDefault();ics(k,b,st)}}
 function close(){$("#dlg").classList.remove("on")}
+/* subscribe to the whole JATF calendar (updates by itself) */
+$("#sub").onclick=()=>{
+  if(!API_URL){alertBox("Subscription needs the live schedule (API_URL).");return}
+  const http=API_URL+"?ics=all",webcal=http.replace(/^https?:/,"webcal:");
+  const gUrl="https://calendar.google.com/calendar/r?cid="+encodeURIComponent(webcal);
+  $("#box").className="box";
+  $("#box").innerHTML=`<h3>Subscribe to JATF events</h3><p style="color:var(--mut);margin:6px 0 14px">Every confirmed mission appears in your own calendar and stays up to date: new missions, changes and cancellations arrive by themselves.</p>
+  <div class="btns" style="flex-direction:column;align-items:stretch">
+    <a class="btn" href="${esc(webcal)}" style="text-decoration:none;text-align:center">Apple Calendar (iPhone, iPad, Mac)</a>
+    <a class="btn ghost" href="${esc(gUrl)}" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">Google Calendar</a>
+    <button class="btn ghost" id="cpy" type="button">Copy link (Outlook, other apps)</button>
+    <button class="btn ghost" id="cls" type="button">Close</button></div>
+  <p style="color:var(--mut);font-size:13px;margin-top:12px">Apple refreshes about every hour. Google Calendar can take several hours to pick up changes.</p>`;
+  $("#dlg").classList.add("on");$("#cls").onclick=close;
+  $("#cpy").onclick=async()=>{try{await navigator.clipboard.writeText(http);$("#cpy").textContent="Link copied ✓"}catch(e){$("#cpy").textContent=http}}};
+function alertBox(m){$("#box").className="box";$("#box").innerHTML=`<p>${esc(m)}</p><div class="btns"><button class="btn ghost" id="cls">Close</button></div>`;$("#dlg").classList.add("on");$("#cls").onclick=close}
 $("#dlg").addEventListener("click",e=>{if(e.target.id=="dlg")close()});
 addEventListener("keydown",e=>{if(e.key=="Escape")close()});
 

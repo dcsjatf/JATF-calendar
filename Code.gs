@@ -65,7 +65,37 @@ function json_(o) {
 }
 
 function doGet(e) {
-  return json_({ ok: true, bookings: public_(readAll_(), e.parameter.token) });
+  const p = (e && e.parameter) || {};
+  if (p.ics) return ics_(String(p.ics));          // ?ics=all (subscription) or ?ics=YYYY-MM-DD (one mission)
+  return json_({ ok: true, bookings: public_(readAll_(), p.token) });
+}
+
+/* ===== CALENDAR FILES (.ics) for Apple Calendar, Outlook and calendar subscriptions ===== */
+function ics_(which) {
+  const all = readAll_();
+  let keys = Object.keys(all).sort().filter(k => all[k].status === 'confirmed' || all[k].status === 'cancelled');
+  if (which !== 'all') keys = keys.filter(k => k === which);
+  const esc = t => String(t || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const fmt = ms => Utilities.formatDate(new Date(ms), 'UTC', "yyyyMMdd'T'HHmmss'Z'");
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JATF//Event Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'X-WR-CALNAME:JATF Events', 'X-WR-CALDESC:Joint Air Task Force mission schedule',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'];
+  keys.forEach(k => {
+    const r = all[k], d = k.split('-').map(Number), t = (r.time || '20:00').split(':').map(Number);
+    const st = Date.UTC(d[0], d[1] - 1, d[2], t[0] || 0, t[1] || 0);
+    const name = r.title || r.map || (r.type + ' mission');
+    const canc = r.status === 'cancelled';
+    L.push('BEGIN:VEVENT', 'UID:jatf-' + k + '@dcsjatf.github.io', 'DTSTAMP:' + fmt(Date.now()),
+      'DTSTART:' + fmt(st), 'DTEND:' + fmt(st + 3 * 3600e3),
+      'SUMMARY:' + esc((canc ? 'CANCELLED – ' : '') + 'JATF – ' + name),
+      'DESCRIPTION:' + esc(r.type + ' ' + r.era + (r.map ? ' · ' + r.map : '') + '\nMission editor: ' + r.discord +
+        (r.notes ? '\n' + r.notes : '') + '\n\n' + CAL_URL),
+      'URL:' + CAL_URL, 'STATUS:' + (canc ? 'CANCELLED' : 'CONFIRMED'), 'END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  // fold lines longer than 74 characters (iCalendar rule)
+  const out = L.map(l => { let o = ''; while (l.length > 74) { o += l.slice(0, 74) + '\r\n '; l = l.slice(74); } return o + l; }).join('\r\n');
+  return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.ICAL);
 }
 
 function doPost(e) {
