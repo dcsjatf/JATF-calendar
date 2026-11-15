@@ -115,9 +115,27 @@ button,select{font:inherit;color:inherit}
 .note{background:#1b2440;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:14px;color:var(--mut)}
 .foot{color:var(--mut);font-size:13px;margin-top:18px}
 @media(prefers-reduced-motion:no-preference){.cal{animation:fi .25s ease}@keyframes fi{from{opacity:.4}to{opacity:1}}}
+
+/* intro: a gold line that opens vertically while the schedule loads */
+#intro{position:fixed;inset:0;z-index:50;pointer-events:none}
+#intro .ih{position:absolute;left:0;right:0;height:50.5%;background:#0b1424;transition:transform .8s cubic-bezier(.7,0,.2,1)}
+#intro .ih.t{top:0}#intro .ih.b{bottom:0}
+#intro .il{position:absolute;top:50%;left:50%;height:2px;width:min(60vw,520px);margin-top:-1px;transform:translateX(-50%) scaleX(.04);background:linear-gradient(90deg,transparent,#ffc000 20%,#ffc000 80%,transparent);animation:ilg 1.4s ease-in-out infinite alternate;box-shadow:0 0 18px #ffc00088}
+#intro img{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-118px 0 0 -42px;opacity:0;animation:ilf .6s .1s ease forwards;transition:opacity .3s}
+@keyframes ilg{to{transform:translateX(-50%) scaleX(1)}}
+@keyframes ilf{to{opacity:1}}
+#intro.open .il{animation:none;transform:translateX(-50%) scaleX(1);width:100vw;opacity:0;transition:width .35s ease,opacity .5s .35s}
+#intro.open img{animation:none;opacity:0}
+#intro.open .ih.t{transform:translateY(-100%);transition-delay:.3s}
+#intro.open .ih.b{transform:translateY(100%);transition-delay:.3s}
+body.loading main,body.loading .top{opacity:0;transform:scale(.985)}
+main,.top{transition:opacity .9s .45s ease,transform .9s .45s ease}
+@media(prefers-reduced-motion:reduce){#intro .ih,#intro .il,main,.top{transition:opacity .3s!important;animation:none!important}#intro.open{opacity:0;transition:opacity .3s}#intro.open .ih{transform:none}}
 </style>
 </head>
-<body>
+<body class="loading">
+<div id="intro" aria-hidden="true"><div class="ih t"></div><div class="ih b"></div><div class="il"></div><img alt=""></div>
+
 <header class="top">
   <div class="brand"><img id="logo" alt="JATF logo"><h1>JATF <span>Event Calendar</span></h1></div>
   <div class="tz" id="tz"></div>
@@ -287,7 +305,13 @@ async function load(){
   try{const r=await fetch(API_URL);const j=await r.json();if(j.bookings)B=j.bookings;$("#note").hidden=true}
   catch(e){const n=$("#note");n.hidden=false;n.textContent="Can't reach the schedule right now — retrying every minute."}
   render()}
-render();load();
+/* intro reveal: wait for the schedule (max 8 s), at least 0.7 s on screen */
+const introT0=Date.now();let introDone=false;
+try{$("#intro img").src=LOGO}catch(e){}
+function reveal(){if(introDone)return;introDone=true;const w=Math.max(0,700-(Date.now()-introT0));
+  setTimeout(()=>{$("#intro").classList.add("open");document.body.classList.remove("loading");setTimeout(()=>{const i=$("#intro");if(i)i.remove()},1400)},w)}
+setTimeout(reveal,8000);
+render();load().finally(reveal);
 setInterval(()=>{if(!document.hidden)API_URL?load():renderNext()},60000);
 addEventListener("visibilitychange",()=>{if(!document.hidden&&API_URL)load()});
 }
