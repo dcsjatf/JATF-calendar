@@ -293,9 +293,12 @@ function updateDiscord_(all) {
 
 function send_(hook, payload, props) {
   const key = msgKey_(hook);
-  // keep the message already posted before multi-server support
-  if (!props.getProperty(key) && props.getProperty('DISCORD_MSG_ID')) {
-    props.setProperty(key, props.getProperty('DISCORD_MSG_ID'));
+  // message posted by the older single-server version of this script
+  const legacy = props.getProperty('DISCORD_MSG_ID');
+  if (legacy) {
+    if (!props.getProperty(key)) props.setProperty(key, legacy);
+    else if (props.getProperty(key) !== legacy)   // a duplicate: remove it, keep one message only
+      UrlFetchApp.fetch(hook + '/messages/' + legacy, { method: 'delete', muteHttpExceptions: true });
     props.deleteProperty('DISCORD_MSG_ID');
   }
   const opt = { method: 'patch', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true };
