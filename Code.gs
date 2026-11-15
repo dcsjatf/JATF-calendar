@@ -277,7 +277,7 @@ function updateDiscord_(all) {
   };
   if (v) {
     // Poster of the current month, rendered by the GitHub workflow (same as the portal's poster)
-    embed.image = { url: CAL_URL + 'poster.png?v=' + v };
+    embed.image = { url: CAL_URL + 'posters/poster-' + v + '.png' };
     embed.description = '[Open the full calendar](' + CAL_URL + ')';
   } else {
     // Fallback until the first poster exists: text list

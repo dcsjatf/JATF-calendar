@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add poster.png
+          git add -A poster.png posters
           git commit -m "Update Discord poster (${{ steps.r.outputs.v }})"
           git push
 
@@ -46,7 +46,7 @@ jobs:
         run: |
           WANT=$(sha1sum poster.png | cut -c1-40)
           for i in $(seq 1 40); do
-            GOT=$(curl -fsSL "https://dcsjatf.github.io/JATF-calendar/poster.png?nocache=$i$RANDOM" | sha1sum | cut -c1-40 || true)
+            GOT=$(curl -fsSL "https://dcsjatf.github.io/JATF-calendar/posters/poster-${{ steps.r.outputs.v }}.png?nocache=$i$RANDOM" | sha1sum | cut -c1-40 || true)
             [ "$GOT" = "$WANT" ] && break
             sleep 15
           done
