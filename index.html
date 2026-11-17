@@ -106,6 +106,8 @@ button,select{font:inherit;color:inherit}
 .box{background:var(--bg2);border:1px solid var(--line);border-top:6px solid var(--gold);border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:90vh;overflow:auto}
 .box.PvP{border-top-color:var(--red)}.box.PvEvP{border-top-color:var(--blue)}.box.Training{border-top-color:var(--green)}
 .box h3{font:800 24px/1.15 Montserrat,sans-serif;margin:0 0 4px}
+.desc{margin:14px 0 4px;font-size:16px;line-height:1.5;white-space:pre-line}
+.btn.book{display:flex;justify-content:center;align-items:center;text-decoration:none;margin:14px 0 2px;font-size:17px}
 .kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 12px;margin:16px 0;font-size:16px}
 .kv dt{color:var(--mut)}.kv dd{margin:0}
 .btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
@@ -261,10 +263,12 @@ $("#agenda").addEventListener("keydown",e=>{if(e.key=="Enter"){const it=e.target
 function openEv(k){const b=B[k];if(!b||b.status=="blocked")return;const st=start(k,b);
   $("#box").className="box "+b.type;
   $("#box").innerHTML=`<h3>${esc(head(b))}</h3><div class="s" style="color:var(--mut)">${esc(b.type)} · ${esc(b.era)}${b.status=="pending"?'<span class="tag">pending</span>':b.status=="cancelled"?'<span class="tag canc">CANCELLED</span>':""}</div>
+  ${b.desc?`<p class="desc">${esc(b.desc)}</p>`:""}
+  ${b.ato&&/^https:\/\//i.test(b.ato)&&b.status!="cancelled"?`<a class="btn book" href="${esc(b.ato)}" target="_blank" rel="noopener">Book a flight ↗</a>`:""}
   <dl class="kv"><dt>Date</dt><dd>${esc(st.toLocaleDateString([], {weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}))}</dd>
   <dt>Time</dt><dd>${esc(b.time)} Zulu<br><span style="color:var(--mut)">${esc(locDay(st))}, ${esc(loc(st))} your time</span></dd>
-  ${b.map?`<dt>Map</dt><dd>${esc(b.map)}</dd>`:""}<dt>Mission editor</dt><dd class="who">${esc(b.discord)}</dd>${b.notes?`<dt>Notes</dt><dd>${esc(b.notes)}</dd>`:""}</dl>
-  ${b.status=="cancelled"?`<p style="color:#ff8a8d;margin:0 0 8px">This mission has been cancelled by JATF staff.</p><div class="btns"><button class="btn ghost" id="cls">Close</button></div>`:`<div class="btns"><a class="btn" id="gcal" href="${gcal(k,b,st)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Google Calendar</a><a class="btn ghost" id="ics" href="${API_URL?esc(API_URL+"?ics="+k):"#"}" style="text-decoration:none;display:inline-flex;align-items:center">Apple Calendar</a><button class="btn ghost" id="cls">Close</button></div>`}`;
+  ${b.map?`<dt>Map</dt><dd>${esc(b.map)}</dd>`:""}<dt>Mission editor</dt><dd class="who">${esc(b.discord)}</dd></dl>
+  ${b.status=="cancelled"?`<p style="color:#ff8a8d;margin:0 0 8px">This mission has been cancelled by JATF staff.</p><div class="btns"><button class="btn ghost" id="cls">Close</button></div>`:`<div class="btns"><a class="btn ghost" id="gcal" href="${gcal(k,b,st)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Google Calendar</a><a class="btn ghost" id="ics" href="${API_URL?esc(API_URL+"?ics="+k):"#"}" style="text-decoration:none;display:inline-flex;align-items:center">Apple Calendar</a><button class="btn ghost" id="cls">Close</button></div>`}`;
   $("#dlg").classList.add("on");($("#gcal")||$("#cls")).focus();
   $("#cls").onclick=close;if($("#ics")&&!API_URL)$("#ics").onclick=e=>{e.preventDefault();ics(k,b,st)}}
 function close(){$("#dlg").classList.remove("on")}
@@ -288,12 +292,12 @@ $("#dlg").addEventListener("click",e=>{if(e.target.id=="dlg")close()});
 addEventListener("keydown",e=>{if(e.key=="Escape")close()});
 
 function gcal(k,b,st){const f=d=>d.toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");const en=new Date(st.getTime()+3*36e5);
-  const q=new URLSearchParams({action:"TEMPLATE",text:"JATF – "+head(b),dates:f(st)+"/"+f(en),details:`${b.type} ${b.era}${b.map?" · "+b.map:""}\nMission editor: ${b.discord}${b.notes?"\n"+b.notes:""}\n\nhttps://dcsjatf.github.io/JATF-calendar/`});
+  const q=new URLSearchParams({action:"TEMPLATE",text:"JATF – "+head(b),dates:f(st)+"/"+f(en),details:`${b.desc?b.desc+"\n\n":""}${b.type} ${b.era}${b.map?" · "+b.map:""}\nMission editor: ${b.discord}${b.ato?"\n\nATO / Book a flight: "+b.ato:""}\n\nhttps://dcsjatf.github.io/JATF-calendar/`});
   return esc("https://calendar.google.com/calendar/render?"+q.toString().replace(/(\d{8}T\d{6}Z)%2F/,"$1/"))}
 function ics(k,b,st){const f=d=>d.toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");const en=new Date(st.getTime()+3*36e5);
   const t=s=>String(s||"").replace(/[\\,;]/g,m=>"\\"+m).replace(/\n/g,"\\n");
   const txt=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//JATF//Event Calendar//EN","BEGIN:VEVENT",`UID:jatf-${k}@jatf`,`DTSTAMP:${f(new Date())}`,`DTSTART:${f(st)}`,`DTEND:${f(en)}`,
-    `SUMMARY:${t("JATF – "+head(b))}`,`DESCRIPTION:${t(`${b.type} ${b.era}${b.map?" · "+b.map:""}\nMission editor: ${b.discord}${b.notes?"\n"+b.notes:""}`)}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");
+    `SUMMARY:${t("JATF – "+head(b))}`,`DESCRIPTION:${t(`${b.desc?b.desc+"\n\n":""}${b.type} ${b.era}${b.map?" · "+b.map:""}\nMission editor: ${b.discord}${b.ato?"\n\nATO / Book a flight: "+b.ato:""}`)}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");
   const u=URL.createObjectURL(new Blob([txt],{type:"text/calendar"}));const a=document.createElement("a");a.href=u;a.download=`JATF-${k}.ics`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}
 
 $("#prev").onclick=()=>{if(mode=="season"){sy--;render();return}view.m--;if(view.m<0){view.m=11;view.y--}render()};

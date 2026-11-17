@@ -4,7 +4,7 @@
  * Setup: see the steps at the bottom of this file.
  */
 const SHEET = 'Bookings';
-const COLS = ['date', 'discord', 'title', 'type', 'era', 'map', 'time', 'notes', 'status', 'createdBy', 'createdAt'];
+const COLS = ['date', 'discord', 'title', 'type', 'era', 'map', 'time', 'notes', 'status', 'createdBy', 'createdAt', 'ato', 'desc'];
 
 function sheet_() {
   const ss = SpreadsheetApp.getActive();
@@ -16,6 +16,7 @@ function sheet_() {
     s.getRange('A:A').setNumberFormat('@');
     s.getRange('G:G').setNumberFormat('@');
   }
+  if (s.getLastColumn() < COLS.length) s.getRange(1, 1, 1, COLS.length).setValues([COLS]);   // adds new columns (ato, desc)
   return s;
 }
 
@@ -37,7 +38,7 @@ function public_(all, token) {
     const r = all[k];
     o[k] = {
       discord: r.discord, title: r.title, type: r.type, era: r.era, map: r.map,
-      time: r.time, notes: r.notes, status: r.status || 'pending',
+      time: r.time, notes: r.notes, status: r.status || 'pending', ato: r.ato || '', desc: r.desc || '',
       createdAt: Number(r.createdAt) || 0,
       mine: !!token && r.createdBy === token
     };
@@ -55,7 +56,8 @@ function rowOf_(date, d) {
   return COLS.map(c => {
     if (c === 'date') return "'" + date;
     if (c === 'time') return "'" + clean_(d.time, 5);
-    if (c === 'notes' || c === 'title') return clean_(d[c], 300);
+    if (c === 'notes' || c === 'title' || c === 'desc') return clean_(d[c], 300);
+    if (c === 'ato') return /^https:\/\/[^\s"'<>]+$/i.test(String(d.ato || '').trim()) ? String(d.ato).trim().slice(0, 500) : '';
     return clean_(d[c]);
   });
 }
@@ -88,9 +90,9 @@ function ics_(which) {
     L.push('BEGIN:VEVENT', 'UID:jatf-' + k + '@dcsjatf.github.io', 'DTSTAMP:' + fmt(Date.now()),
       'DTSTART:' + fmt(st), 'DTEND:' + fmt(st + 3 * 3600e3),
       'SUMMARY:' + esc((canc ? 'CANCELLED – ' : '') + 'JATF – ' + name),
-      'DESCRIPTION:' + esc(r.type + ' ' + r.era + (r.map ? ' · ' + r.map : '') + '\nMission editor: ' + r.discord +
-        (r.notes ? '\n' + r.notes : '') + '\n\n' + CAL_URL),
-      'URL:' + CAL_URL, 'STATUS:' + (canc ? 'CANCELLED' : 'CONFIRMED'), 'END:VEVENT');
+      'DESCRIPTION:' + esc((r.desc ? r.desc + '\n\n' : '') + r.type + ' ' + r.era + (r.map ? ' · ' + r.map : '') +
+        '\nMission editor: ' + r.discord + (r.ato ? '\n\nATO / Book a flight: ' + r.ato : '') + '\n\n' + CAL_URL),
+      'URL:' + (r.ato || CAL_URL), 'STATUS:' + (canc ? 'CANCELLED' : 'CONFIRMED'), 'END:VEVENT');
   });
   L.push('END:VCALENDAR');
   // fold lines longer than 74 characters (iCalendar rule)
@@ -135,7 +137,7 @@ function doPost(e) {
       const rec = body.blank
         ? { status: 'blocked', title: d.title || d.notes || '', createdBy: token, createdAt: Date.now() }
         : {
-            discord: d.discord, title: d.title, type: d.type, era: d.era, map: d.map, time: d.time, notes: d.notes,
+            discord: d.discord, title: d.title, type: d.type, era: d.era, map: d.map, time: d.time, notes: d.notes, ato: d.ato, desc: d.desc,
             status: prev && editing === date ? prev.status : (isStaff ? 'confirmed' : 'pending'),
             createdBy: prev ? prev.createdBy : token,
             createdAt: prev ? prev.createdAt : Date.now()

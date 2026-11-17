@@ -47,7 +47,7 @@ h2{font:800 clamp(22px,2.6vw,30px)/1.1 Montserrat,sans-serif;margin:0 0 14px}
 .card{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:20px}
 label.f{display:block;font-size:14px;color:var(--mut);margin:14px 0 6px}
 label.f:first-of-type{margin-top:0}
-input[type=text],input[type=date],select,textarea{width:100%;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:16px}
+input[type=text],input[type=url],input[type=date],select,textarea{width:100%;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:16px}
 textarea{min-height:64px;resize:vertical}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
@@ -176,6 +176,10 @@ main,.top{transition:opacity .9s .45s ease,transform .9s .45s ease}
         <div><label class="f" for="fH">Time (Zulu) *</label><div class="tm"><select id="fH" aria-label="Hour"></select>:<select id="fM" aria-label="Minutes"></select></div></div>
       </div>
       <div class="avail" id="avail">Pick a date, or tap a day on the season board.</div>
+      <label class="f" for="fDesc">Short description for pilots</label>
+      <textarea id="fDesc" maxlength="300" placeholder="Optional — e.g. SEAD/CAP over the Caucasus, two flights of four"></textarea>
+      <label class="f" for="fAto">ATO link (Book a flight)</label>
+      <input type="url" id="fAto" maxlength="500" placeholder="https://… — optional, you can add it later" inputmode="url">
       <label class="f" for="fNotes">Notes for staff</label>
       <textarea id="fNotes" maxlength="300" placeholder="Optional"></textarea>
       <label class="chk" id="blkWrap" hidden><input type="checkbox" id="fBlk"> Staff: mark this date as BLANK (no event)</label>
@@ -345,7 +349,7 @@ function renderSchedule(){$("#schTitle").textContent=`Season ${$("#sLbl").textCo
     if(mk!=lastM){rows+=`<tr class="mh"><td colspan="6">${mk}</td></tr>`;lastM=mk}
     const blk=b.status=="blocked";
     rows+=`<tr${b.status=="cancelled"?' class="canc-row"':""}><td class="n" data-l="Date"><b>${fmtDate(d)}</b></td><td class="n" data-l="Time">${blk?"—":esc(b.time)+"Z"}</td>
-    <td data-l="Mission">${blk?"BLANK"+(b.title?" · "+esc(b.title):""):`${esc(b.type)} ${esc(b.era)}${b.map?" · "+esc(b.map):""}${b.title?`<br><small style="color:var(--mut)">${esc(b.title)}</small>`:""}`}</td>
+    <td data-l="Mission">${blk?"BLANK"+(b.title?" · "+esc(b.title):""):`${esc(b.type)} ${esc(b.era)}${b.map?" · "+esc(b.map):""}${b.title?`<br><small style="color:var(--mut)">${esc(b.title)}</small>`:""}${b.ato&&/^https:\/\//i.test(b.ato)?` <a href="${esc(b.ato)}" target="_blank" rel="noopener" style="color:var(--gold);font-size:13px">ATO ↗</a>`:canManage(b)?` <small style="color:var(--mut)">· no ATO yet</small>`:""}`}</td>
     <td data-l="Editor"><span class="who">${blk?"Staff":esc(b.discord)}</span></td>
     <td data-l="Status"><span class="pill ${esc(b.status)}">${blk?"blank":esc(b.status)}</span></td><td data-l="">${actions(d,b)}</td></tr>`}
   $("#schWrap").innerHTML=`<div class="card" style="padding:6px 10px"><table class="stack"><thead><tr><th>Date</th><th>Time</th><th>Mission</th><th>Editor</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
@@ -373,7 +377,7 @@ $("#dOk").addEventListener("click",async()=>{$("#dlg").classList.remove("on");if
 function setRadio(n,v){const r=document.querySelector(`input[name=${n}][value="${v}"]`);if(r)r.checked=true}
 function startEdit(d){const b=B[d];editing=d;location.hash="#book";
   $("#fDiscord").value=b.discord;$("#fTitleIn").value=b.title||"";setRadio("type",b.type);setRadio("era",b.era);$("#fMap").value=MAPS.includes(b.map)?b.map:"";
-  $("#fDate").value=d;const[h,m]=(b.time||"20:00").split(":");$("#fH").value=h;$("#fM").value=m;$("#fNotes").value=b.notes||"";$("#fBlk").checked=false;
+  $("#fDate").value=d;const[h,m]=(b.time||"20:00").split(":");$("#fH").value=h;$("#fM").value=m;$("#fNotes").value=b.notes||"";$("#fDesc").value=b.desc||"";$("#fAto").value=b.ato||"";$("#fBlk").checked=false;
   $("#fTitle").textContent="Edit booking";$("#fSubmit").textContent="Save changes";$("#fCancel").hidden=false;checkAvail();$("#form").scrollIntoView({behavior:"smooth"})}
 function stopEdit(){editing=null;$("#fTitle").textContent="Book a mission";$("#fSubmit").textContent="Request booking";$("#fCancel").hidden=true;$("#form").reset();
   try{$("#fDiscord").value=localStorage.getItem("jatf-discord")||""}catch(e){}$("#fH").value="20";checkAvail()}
@@ -386,8 +390,9 @@ async function safe(fn,ok){try{await fn();if(ok)toast(ok);return true}catch(e){
 $("#form").addEventListener("submit",async e=>{e.preventDefault();
   const d=$("#fDate").value;const blk=staff&&$("#fBlk").checked;
   const data={discord:$("#fDiscord").value.trim(),title:$("#fTitleIn").value.trim(),type:document.querySelector("input[name=type]:checked").value,
-    era:document.querySelector("input[name=era]:checked").value,map:$("#fMap").value,time:`${$("#fH").value}:${$("#fM").value}`,notes:$("#fNotes").value.trim()};
+    era:document.querySelector("input[name=era]:checked").value,map:$("#fMap").value,time:`${$("#fH").value}:${$("#fM").value}`,notes:$("#fNotes").value.trim(),desc:$("#fDesc").value.trim(),ato:$("#fAto").value.trim()};
   if(!blk&&!data.discord){toast("Discord name is required",1);$("#fDiscord").focus();return}
+  if(data.ato&&!/^https:\/\/\S+$/i.test(data.ato)){toast("The ATO link must start with https://",1);$("#fAto").focus();return}
   try{localStorage.setItem("jatf-discord",data.discord)}catch(e){}
   $("#fSubmit").disabled=true;
   try{
