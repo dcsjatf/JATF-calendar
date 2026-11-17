@@ -107,6 +107,8 @@ button,select{font:inherit;color:inherit}
 .box.PvP{border-top-color:var(--red)}.box.PvEvP{border-top-color:var(--blue)}.box.Training{border-top-color:var(--green)}
 .box h3{font:800 24px/1.15 Montserrat,sans-serif;margin:0 0 4px}
 .desc{margin:14px 0 4px;font-size:16px;line-height:1.5;white-space:pre-line}
+.btn.book.off{background:transparent;border:1px solid var(--line);color:var(--mut);cursor:default}
+.ev em.bo{display:block;font-style:normal;font-weight:600;font-size:12px;color:var(--gold);margin-top:2px;white-space:nowrap}
 .btn.book{display:flex;justify-content:center;align-items:center;text-decoration:none;margin:14px 0 2px;font-size:17px}
 .kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 12px;margin:16px 0;font-size:16px}
 .kv dt{color:var(--mut)}.kv dd{margin:0}
@@ -226,7 +228,7 @@ function render(){
     const evs=map[k]||[];const blk=evs.some(b=>b.status=="blocked");const real=evs.filter(b=>b.status!="blocked");
     let cls="c";if(d.getUTCMonth()!=m)cls+=" out";if(k==TODAY)cls+=" today";if(blk)cls+=" blk";
     h+=`<div class="${cls}" data-k="${k}"><div class="n"><b>${d.getUTCDate()}</b>${blk?"<small>BLANK</small>":""}</div>`+
-      real.map(b=>`<button class="ev ${esc(b.type)}${b.status=="pending"?" pend":""}${b.status=="cancelled"?" canc":""}" data-k="${k}"><b>${esc(b.time)}Z ${esc(b.type)}</b><span>${esc(head(b))}</span></button>`).join("")+
+      real.map(b=>`<button class="ev ${esc(b.type)}${b.status=="pending"?" pend":""}${b.status=="cancelled"?" canc":""}" data-k="${k}"><b>${esc(b.time)}Z ${esc(b.type)}</b><span>${esc(head(b))}</span>${b.status!="cancelled"&&hasAto(b)&&!ended(k,b)?`<em class="bo">Bookings Open</em>`:""}</button>`).join("")+
       `<div class="dots">${real.map(b=>`<i class="dot ${esc(b.type)}${b.status=="cancelled"?" canc":""}"></i>`).join("")}</div></div>`}
   $("#cal").innerHTML=h;
   const list=events().filter(([k,b])=>b.status!="blocked"&&k.startsWith(`${y}-${pad(m+1)}`));
@@ -260,11 +262,13 @@ $("#cal").addEventListener("click",e=>{const ev=e.target.closest(".ev");if(ev){o
 $("#agenda").addEventListener("click",e=>{const it=e.target.closest(".it");if(it)openEv(it.dataset.k)});
 $("#agenda").addEventListener("keydown",e=>{if(e.key=="Enter"){const it=e.target.closest(".it");if(it)openEv(it.dataset.k)}});
 
+const hasAto=b=>!!b.ato&&/^https:\/\//i.test(b.ato);
+const ended=(k,b)=>start(k,b).getTime()+3*36e5<Date.now();
 function openEv(k){const b=B[k];if(!b||b.status=="blocked")return;const st=start(k,b);
   $("#box").className="box "+b.type;
   $("#box").innerHTML=`<h3>${esc(head(b))}</h3><div class="s" style="color:var(--mut)">${esc(b.type)} · ${esc(b.era)}${b.status=="pending"?'<span class="tag">pending</span>':b.status=="cancelled"?'<span class="tag canc">CANCELLED</span>':""}</div>
   ${b.desc?`<p class="desc">${esc(b.desc)}</p>`:""}
-  ${b.ato&&/^https:\/\//i.test(b.ato)&&b.status!="cancelled"?`<a class="btn book" href="${esc(b.ato)}" target="_blank" rel="noopener">Book a flight ↗</a>`:""}
+  ${b.status=="cancelled"?"":ended(k,b)?`<span class="btn book off" aria-disabled="true">Bookings Closed</span>`:hasAto(b)?`<a class="btn book" href="${esc(b.ato)}" target="_blank" rel="noopener">Book a flight ↗</a>`:`<span class="btn book off" aria-disabled="true">Bookings opening soon</span>`}
   <dl class="kv"><dt>Date</dt><dd>${esc(st.toLocaleDateString([], {weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}))}</dd>
   <dt>Time</dt><dd>${esc(b.time)} Zulu<br><span style="color:var(--mut)">${esc(locDay(st))}, ${esc(loc(st))} your time</span></dd>
   ${b.map?`<dt>Map</dt><dd>${esc(b.map)}</dd>`:""}<dt>Mission editor</dt><dd class="who">${esc(b.discord)}</dd></dl>
